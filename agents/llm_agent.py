@@ -292,3 +292,41 @@ Top Candidates Data:
             )
 
         return response
+
+    def reflect_on_scoring(self, jd, profile, original_analysis, original_score):
+        """
+        Stage 4.5: Reflect on and audit a candidate's LLM scoring.
+        Uses LLaMA (insights model) to audit Mistral's (scoring model) output.
+        Returns reflection text with corrected score, or None if LLM unavailable.
+        """
+        model = self.MODELS["insights"]
+        profile_brief = {k: v for k, v in profile.items()
+                         if k not in ('full_text', 'llm_analysis')}
+
+        prompt = f"""You are an AI quality auditor. A scoring AI gave this candidate {original_score}/100.
+Your job is to VERIFY if this score is accurate by checking it against hard facts.
+
+Job Description:
+{jd[:1500]}
+
+Candidate Profile:
+{json.dumps(profile_brief, indent=2, default=str)[:1500]}
+
+Original AI Scoring:
+{str(original_analysis)[:1000]}
+
+AUDIT CHECKLIST:
+1. Does the candidate meet the minimum experience requirement stated in the JD?
+2. Does the candidate have the core technical skills mentioned in the JD?
+3. Is the score proportional to the keyword match ({profile.get('keyword_score', 0)}%)?
+4. Does the score account for missing critical skills: {', '.join(profile.get('keywords_missed', [])[:5])}?
+
+INSTRUCTIONS:
+- If the score is fair, respond: "Corrected Score: {original_score}/100" and explain why.
+- If the score is too high, provide a lower corrected score with reasoning.
+- If the score is too low, provide a higher corrected score with reasoning.
+- Start with "Corrected Score: XX/100" on the first line.
+- Then provide 2-3 bullet points of reasoning.
+"""
+        response, elapsed = self.call_llm(model, prompt, timeout=30)
+        return response if response else None

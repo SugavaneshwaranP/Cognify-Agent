@@ -23,6 +23,8 @@ from pipeline.llm_extractor import LLMExtractor
 from pipeline.candidate_ranker import CandidateRanker
 from pipeline.final_analysis import FinalAnalysis
 from agents.llm_agent import LLMAgent
+from agents.reflection_agent import ReflectionAgent
+from agents.chat_agent import ChatAgent
 from database.resume_db import ResumeDB
 
 # -- PAGE CONFIG --
@@ -231,6 +233,198 @@ st.markdown("""
         padding: 24px;
         color: #166534;
     }
+
+    /* Reflection cards */
+    .reflection-card {
+        background: white;
+        padding: 18px 22px;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        transition: all 0.2s ease;
+    }
+    .reflection-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        transform: translateY(-1px);
+    }
+    .reflection-card.corrected {
+        border-left: 4px solid #f59e0b;
+        background: linear-gradient(135deg, #fffbeb, #fefce8);
+    }
+    .reflection-card.validated {
+        border-left: 4px solid #10b981;
+        background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+    }
+    .anomaly-tag {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        margin: 2px 3px;
+    }
+    .anomaly-high {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .anomaly-medium {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .anomaly-low {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    .confidence-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    .confidence-HIGH {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .confidence-MEDIUM {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .confidence-LOW {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .score-correction {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+    .score-original {
+        color: #94a3b8;
+        text-decoration: line-through;
+    }
+    .score-arrow {
+        color: #475569;
+    }
+    .score-corrected {
+        color: #059669;
+    }
+
+    /* Chat interface */
+    .chat-container {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-radius: 20px;
+        padding: 28px;
+        margin-top: 8px;
+        border: 1px solid #334155;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    }
+    .chat-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #334155;
+    }
+    .chat-header-icon {
+        font-size: 1.8rem;
+        background: linear-gradient(135deg, #4f46e5, #06b6d4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .chat-header-title {
+        color: #f1f5f9 !important;
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin: 0 !important;
+    }
+    .chat-header-badge {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .chat-messages {
+        max-height: 450px;
+        overflow-y: auto;
+        padding: 8px 0;
+        scrollbar-width: thin;
+        scrollbar-color: #475569 transparent;
+    }
+    .chat-msg {
+        margin-bottom: 16px;
+        display: flex;
+        gap: 10px;
+        animation: chatFadeIn 0.3s ease;
+    }
+    @keyframes chatFadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-msg.user { justify-content: flex-end; }
+    .chat-msg.assistant { justify-content: flex-start; }
+    .chat-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+    .chat-avatar.user-av {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        order: 2;
+    }
+    .chat-avatar.ai-av {
+        background: linear-gradient(135deg, #06b6d4, #10b981);
+    }
+    .chat-bubble {
+        max-width: 80%;
+        padding: 14px 18px;
+        border-radius: 16px;
+        font-size: 0.88rem;
+        line-height: 1.6;
+    }
+    .chat-bubble.user-bubble {
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+    .chat-bubble.ai-bubble {
+        background: rgba(255,255,255,0.06);
+        color: #e2e8f0;
+        border: 1px solid #334155;
+        border-bottom-left-radius: 4px;
+        backdrop-filter: blur(10px);
+    }
+    .chat-bubble.ai-bubble strong { color: #38bdf8; }
+    .chat-bubble.ai-bubble code { color: #4ade80; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; }
+    .chat-proactive {
+        background: linear-gradient(135deg, rgba(79,70,229,0.15), rgba(6,182,212,0.10));
+        border: 1px solid rgba(79,70,229,0.3);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 12px;
+        color: #cbd5e1;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .chat-proactive:hover {
+        background: linear-gradient(135deg, rgba(79,70,229,0.25), rgba(6,182,212,0.20));
+        border-color: rgba(79,70,229,0.5);
+        transform: translateX(4px);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -243,6 +437,14 @@ if 'is_running' not in st.session_state:
     st.session_state.is_running = False
 if 'pipeline_logs' not in st.session_state:
     st.session_state.pipeline_logs = []
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
+if 'chat_agent' not in st.session_state:
+    st.session_state.chat_agent = ChatAgent(LLMAgent())
+if 'proactive_questions' not in st.session_state:
+    st.session_state.proactive_questions = None
+if 'chat_input_key' not in st.session_state:
+    st.session_state.chat_input_key = 0
 
 TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dataset', 'temp_uploads')
 
@@ -274,6 +476,8 @@ with col_stages:
     prog_extraction = st.progress(0)
     st.write("**Stage 4 – Candidate Scoring (Mistral)**")
     prog_ranking = st.progress(0)
+    st.write("**Stage 4.5 – Self-Correction & Reflection**")
+    prog_reflection = st.progress(0)
     st.write("**Stage 5 – Final AI Insights (LLaMA)**")
     prog_insights = st.progress(0)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -344,6 +548,7 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
     prog_ats.progress(0)
     prog_extraction.progress(0)
     prog_ranking.progress(0)
+    prog_reflection.progress(0)
     prog_insights.progress(0)
 
     try:
@@ -361,6 +566,7 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
         extractor = LLMExtractor(llm_agent)
         ranker_obj = CandidateRanker(llm_agent)
         analyzer = FinalAnalysis(llm_agent)
+        reflection_agent = ReflectionAgent(llm_agent)
 
         # Check Ollama
         ollama_up, available_models = llm_agent.check_ollama_status()
@@ -465,7 +671,49 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
 
         push_log(f"   ✓ Top {shortlist_count} candidates shortlisted.", "SUCCESS")
 
-        # ── Stage 6: Final AI Insights (LLaMA) ──
+        # ── Stage 4.5: Self-Correction & Reflection ──
+        push_log("🔄 Stage 4.5: Running Self-Correction & Reflection...", "INFO")
+        prog_reflection.progress(20)
+        reflection_results = reflection_agent.reflect_batch(
+            ranked[:shortlist_count], jd, use_llm=True
+        )
+        prog_reflection.progress(60)
+
+        # Apply corrected scores to shortlisted candidates
+        corrected_count = 0
+        for candidate, reflection in zip(ranked[:shortlist_count], reflection_results):
+            if reflection['was_corrected']:
+                old_score = reflection['original_score']
+                candidate['llm_score'] = reflection['corrected_score']
+                candidate['composite_score'] = CandidateRanker.compute_composite_score(
+                    candidate['ats_score'], candidate['keyword_score'], candidate['llm_score']
+                )
+                candidate['reflection'] = reflection
+                corrected_count += 1
+                push_log(
+                    f"   ⚠️ {candidate.get('name', candidate['filename'])}: "
+                    f"{old_score} → {reflection['corrected_score']} "
+                    f"({len(reflection['anomalies'])} anomalies)",
+                    "WARNING"
+                )
+            else:
+                candidate['reflection'] = reflection
+                push_log(
+                    f"   ✅ {candidate.get('name', candidate['filename'])}: Score validated.",
+                    "SUCCESS"
+                )
+
+        # Re-rank after corrections
+        ranked = CandidateRanker.rank_candidates(ranked)
+        shortlisted = ranked[:shortlist_count]
+
+        prog_reflection.progress(100)
+        push_log(
+            f"   ✓ Reflection complete: {corrected_count}/{len(reflection_results)} scores corrected.",
+            "SUCCESS"
+        )
+
+        # ── Stage 5: Final AI Insights (LLaMA) ──
         push_log("🤖 Stage 5: Generating executive AI insights (LLaMA)...", "INFO")
         prog_insights.progress(40)
         top_data = [{k: v for k, v in p.items() if k != 'full_text'} for p in shortlisted]
@@ -495,6 +743,7 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
             'candidates': ranked,
             'shortlisted': shortlisted,
             'insights': insights,
+            'reflection_results': reflection_results,
             'total_parsed': len(resumes),
             'total_filtered': len(top_resumes),
             'shortlist_count': shortlist_count,
@@ -502,6 +751,22 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
         }
 
         push_log("🎉 Pipeline execution finished successfully!", "SUCCESS")
+
+        # Generate proactive questions from chat agent
+        st.session_state.proactive_questions = st.session_state.chat_agent.get_proactive_questions(
+            st.session_state.results
+        )
+        # Add welcome message to chat
+        if not st.session_state.chat_messages:
+            shortlisted = st.session_state.results.get('shortlisted', [])
+            top_name = shortlisted[0].get('name', 'Unknown') if shortlisted else 'Unknown'
+            welcome = (
+                f"👋 Pipeline complete! I've analyzed **{st.session_state.results.get('total_parsed', 0)}** "
+                f"resumes and shortlisted **{len(shortlisted)}** candidates. "
+                f"**{top_name}** is the top pick.\n\n"
+                f"Ask me anything — compare candidates, explain scores, or refine the rankings!"
+            )
+            st.session_state.chat_messages.append({"role": "assistant", "content": welcome})
 
     except Exception as e:
         push_log(f"❌ Pipeline Failed: {str(e)}", "ERROR")
@@ -586,7 +851,7 @@ if st.session_state.results:
 
     # Metric cards
     st.markdown("## 📈 Pipeline Summary")
-    m1, m2, m3, m4, m5 = st.columns(5)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     with m1:
         st.markdown(f"""<div class='metric-card'>
             <div class='metric-value'>{res['total_parsed']}</div>
@@ -614,6 +879,13 @@ if st.session_state.results:
         st.markdown(f"""<div class='metric-card'>
             <div class='metric-value'>{avg_score}</div>
             <div class='metric-label'>Avg Composite Score</div>
+        </div>""", unsafe_allow_html=True)
+    with m6:
+        corrected = sum(1 for r in res.get('reflection_results', []) if r.get('was_corrected'))
+        total_reflected = len(res.get('reflection_results', []))
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-value'>{corrected}/{total_reflected}</div>
+            <div class='metric-label'>Scores Corrected</div>
         </div>""", unsafe_allow_html=True)
 
     # ── Shortlisted Candidates ──
@@ -723,6 +995,227 @@ if st.session_state.results:
     st.markdown("---")
     st.markdown("## 🤖 Final AI Insights & Recommendation")
     st.markdown(f"<div class='insights-panel'>{res['insights']}</div>", unsafe_allow_html=True)
+
+    # ── Self-Correction Report ──
+    reflection_data = res.get('reflection_results', [])
+    if reflection_data:
+        st.markdown("---")
+        st.markdown("## 🔄 AI Self-Correction Report")
+        st.markdown(
+            "*The Reflection Agent audited each candidate's LLM score against hard facts "
+            "from the JD and profile, correcting inflated or deflated scores.*"
+        )
+
+        # Summary bar
+        total_r = len(reflection_data)
+        corrected_r = sum(1 for r in reflection_data if r.get('was_corrected'))
+        validated_r = total_r - corrected_r
+
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1:
+            st.markdown(f"""<div class='metric-card'>
+                <div class='metric-value' style='color: #f59e0b;'>{corrected_r}</div>
+                <div class='metric-label'>Scores Corrected</div>
+            </div>""", unsafe_allow_html=True)
+        with rc2:
+            st.markdown(f"""<div class='metric-card'>
+                <div class='metric-value' style='color: #10b981;'>{validated_r}</div>
+                <div class='metric-label'>Scores Validated</div>
+            </div>""", unsafe_allow_html=True)
+        with rc3:
+            avg_adj = 0
+            if corrected_r > 0:
+                avg_adj = round(
+                    sum(r.get('total_adjustment', 0) for r in reflection_data if r.get('was_corrected'))
+                    / corrected_r, 1
+                )
+            st.markdown(f"""<div class='metric-card'>
+                <div class='metric-value' style='color: #ef4444;'>-{avg_adj}</div>
+                <div class='metric-label'>Avg Score Adjustment</div>
+            </div>""", unsafe_allow_html=True)
+
+        # Individual reflection cards
+        for ref in reflection_data:
+            card_class = "corrected" if ref.get('was_corrected') else "validated"
+            status_icon = "⚠️" if ref.get('was_corrected') else "✅"
+            confidence = ref.get('confidence', 'MEDIUM')
+
+            st.markdown(f"<div class='reflection-card {card_class}'>", unsafe_allow_html=True)
+
+            ref_col1, ref_col2 = st.columns([3, 1])
+
+            with ref_col1:
+                st.markdown(f"#### {status_icon} {ref.get('candidate', 'Unknown')}")
+
+                if ref.get('was_corrected'):
+                    st.markdown(
+                        f"<div class='score-correction'>"
+                        f"<span class='score-original'>{ref.get('original_score', '?')}</span>"
+                        f"<span class='score-arrow'>→</span>"
+                        f"<span class='score-corrected'>{ref.get('corrected_score', '?')}</span>"
+                        f"<span style='font-size:0.8rem; color:#64748b;'>/100 (LLM Score)</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f"Score **{ref.get('original_score', '?')}/100** — No issues found."
+                    )
+
+            with ref_col2:
+                st.markdown(
+                    f"<div style='text-align:right; padding-top:10px;'>"
+                    f"<span class='confidence-badge confidence-{confidence}'>Confidence: {confidence}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+
+            # Show anomalies if any
+            anomalies = ref.get('anomalies', [])
+            if anomalies:
+                with st.expander(f"🔍 View {len(anomalies)} Anomalies Detected"):
+                    for a in anomalies:
+                        severity = a.get('severity', 'LOW')
+                        st.markdown(
+                            f"<span class='anomaly-tag anomaly-{severity.lower()}'>"
+                            f"{severity}</span> **{a.get('type', 'UNKNOWN').replace('_', ' ')}**",
+                            unsafe_allow_html=True
+                        )
+                        st.write(f"  {a.get('description', '')}")
+
+            # Show LLM reflection if available
+            llm_reflection = ref.get('llm_reflection')
+            if llm_reflection:
+                with st.expander("🤖 View AI Reflection Analysis"):
+                    st.write(llm_reflection)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════
+# CONVERSATIONAL AI CHAT PANEL
+# ═══════════════════════════════════════════════════════════════════
+if st.session_state.results:
+    st.markdown("---")
+    st.markdown("""
+    <div class='chat-container'>
+        <div class='chat-header'>
+            <span class='chat-header-icon'>💬</span>
+            <span class='chat-header-title'>CognifyX AI Assistant</span>
+            <span class='chat-header-badge'>Agentic AI</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Display proactive questions
+    proactive_qs = st.session_state.proactive_questions
+    if proactive_qs and not any(m.get('role') == 'user' for m in st.session_state.chat_messages):
+        st.markdown("**🤔 I have some questions before you proceed:**")
+        for i, q in enumerate(proactive_qs):
+            if st.button(q, key=f"proactive_{i}", use_container_width=True):
+                # Treat the proactive question as a user query
+                st.session_state.chat_messages.append({"role": "user", "content": q})
+                response = st.session_state.chat_agent.chat(q, st.session_state.results)
+                st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                st.session_state.proactive_questions = None
+                st.rerun()
+
+    # Display chat history
+    for msg in st.session_state.chat_messages:
+        if msg['role'] == 'user':
+            st.markdown(
+                f"<div class='chat-msg user'>"
+                f"<div class='chat-bubble user-bubble'>{msg['content']}</div>"
+                f"<div class='chat-avatar user-av'>👤</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<div class='chat-msg assistant'>"
+                f"<div class='chat-avatar ai-av'>🤖</div>"
+                f"<div class='chat-bubble ai-bubble'>{msg['content']}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    # Chat input
+    chat_col1, chat_col2 = st.columns([5, 1])
+    with chat_col1:
+        user_input = st.text_input(
+            "Ask CognifyX AI...",
+            placeholder="Compare #1 and #2 | Why is #3 ranked here? | Prioritize experience | Summary",
+            key=f"chat_input_{st.session_state.chat_input_key}",
+            label_visibility="collapsed"
+        )
+    with chat_col2:
+        send_clicked = st.button("🚀 Send", use_container_width=True, key="chat_send_btn")
+
+    if (send_clicked or user_input) and user_input and user_input.strip():
+        # Add user message
+        st.session_state.chat_messages.append({"role": "user", "content": user_input.strip()})
+
+        # Get AI response
+        response = st.session_state.chat_agent.chat(user_input.strip(), st.session_state.results)
+        st.session_state.chat_messages.append({"role": "assistant", "content": response})
+
+        # Clear proactive questions after first interaction
+        st.session_state.proactive_questions = None
+
+        # Increment key to clear input
+        st.session_state.chat_input_key += 1
+        st.rerun()
+
+    # Quick action buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
+    with qa_col1:
+        if st.button("📊 Summary", key="qa_summary", use_container_width=True):
+            msg = "Give me a summary"
+            st.session_state.chat_messages.append({"role": "user", "content": msg})
+            response = st.session_state.chat_agent.chat(msg, st.session_state.results)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    with qa_col2:
+        if st.button("🔍 Compare Top 2", key="qa_compare", use_container_width=True):
+            msg = "Compare #1 and #2"
+            st.session_state.chat_messages.append({"role": "user", "content": msg})
+            response = st.session_state.chat_agent.chat(msg, st.session_state.results)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    with qa_col3:
+        if st.button("💡 Explain #1", key="qa_explain", use_container_width=True):
+            msg = "Explain why #1 is ranked first"
+            st.session_state.chat_messages.append({"role": "user", "content": msg})
+            response = st.session_state.chat_agent.chat(msg, st.session_state.results)
+            st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            st.rerun()
+    with qa_col4:
+        if st.button("🗑️ Clear Chat", key="qa_clear", use_container_width=True):
+            st.session_state.chat_messages = []
+            st.session_state.chat_agent.conversation_history = []
+            st.session_state.chat_agent.preferences = {}
+            st.session_state.proactive_questions = st.session_state.chat_agent.get_proactive_questions(
+                st.session_state.results
+            )
+            st.rerun()
+
+elif not st.session_state.results:
+    # Show chat teaser when no results
+    st.markdown("---")
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 20px;
+        padding: 40px; text-align: center; border: 1px solid #334155;'>
+        <span style='font-size: 3rem;'>💬</span>
+        <h3 style='color: #f1f5f9 !important; margin-top: 12px;'>CognifyX AI Assistant</h3>
+        <p style='color: #94a3b8 !important; max-width: 500px; margin: 0 auto;'>
+            Run the screening pipeline to activate the AI Assistant.
+            Ask questions, compare candidates, refine rankings, and get personalized recommendations.
+        </p>
+        <div style='margin-top: 16px;'>
+            <span class='chat-header-badge'>Agentic AI</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Footer ──
 st.markdown("""

@@ -12,6 +12,7 @@ from pipeline.llm_extractor import LLMExtractor
 from pipeline.candidate_ranker import CandidateRanker
 from pipeline.final_analysis import FinalAnalysis
 from agents.llm_agent import LLMAgent
+from agents.reflection_agent import ReflectionAgent
 from database.resume_db import ResumeDB
 
 
@@ -24,6 +25,7 @@ class CoordinatorAgent:
         self.extractor = LLMExtractor(self.llm_agent)
         self.ranker = CandidateRanker(self.llm_agent)
         self.analyzer = FinalAnalysis(self.llm_agent)
+        self.reflection_agent = ReflectionAgent(self.llm_agent)
         self.db = ResumeDB()
         self.logs = []
         self.timings = {}
@@ -135,6 +137,43 @@ class CoordinatorAgent:
         self.timings['scoring'] = round(time.time() - t0, 2)
         self.log(f"   Scoring complete. ({self.timings['scoring']}s)")
 
+        # ── Stage 4.5: Self-Correction & Reflection ───────────────────
+        t0 = time.time()
+        self.log("🔄 Stage 4.5: Running Self-Correction & Reflection...")
+        reflection_results = self.reflection_agent.reflect_batch(
+            structured_profiles, job_description, use_llm=True
+        )
+
+        # Apply corrected scores
+        corrected_count = 0
+        for profile, reflection in zip(structured_profiles, reflection_results):
+            if reflection['was_corrected']:
+                old_score = profile['llm_score']
+                profile['llm_score'] = reflection['corrected_score']
+                profile['composite_score'] = CandidateRanker.compute_composite_score(
+                    profile['ats_score'], profile['keyword_score'], profile['llm_score']
+                )
+                profile['reflection'] = reflection
+                corrected_count += 1
+                self.log(
+                    f"   ⚠️ {profile.get('name', profile['filename'])}: "
+                    f"{old_score} → {reflection['corrected_score']} "
+                    f"({len(reflection['anomalies'])} anomalies)"
+                )
+            else:
+                profile['reflection'] = reflection
+                self.log(f"   ✅ {profile.get('name', profile['filename'])}: Score validated.")
+
+        # Forward reflection logs
+        for log_msg in self.reflection_agent.reflection_logs:
+            self.log(log_msg)
+
+        self.timings['reflection'] = round(time.time() - t0, 2)
+        self.log(
+            f"   Reflection complete: {corrected_count}/{len(structured_profiles)} "
+            f"scores corrected. ({self.timings['reflection']}s)"
+        )
+
         # ── Stage 5: Final Ranking ────────────────────────────────────
         ranked_profiles = CandidateRanker.rank_candidates(structured_profiles)
         shortlisted = ranked_profiles[:shortlist_count]
@@ -178,6 +217,7 @@ class CoordinatorAgent:
             "top_candidates": ranked_profiles,
             "shortlisted": shortlisted,
             "final_summary": summary,
+            "reflection_results": reflection_results,
             "timings": self.timings,
             "logs": self.logs,
             "run_id": run_id
