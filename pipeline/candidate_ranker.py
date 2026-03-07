@@ -50,17 +50,19 @@ class CandidateRanker:
         return 50
 
     @staticmethod
-    def compute_composite_score(ats_score, keyword_score, llm_score):
+    def compute_composite_score(ats_score, keyword_score, llm_score,
+                                w_ats=0.25, w_kw=0.35, w_llm=0.40):
         """
         Weighted composite score:
-        - ATS (TF-IDF similarity): 25%
-        - Keyword match: 35%
-        - LLM analysis score: 40%
+        - ATS (TF-IDF similarity): default 25%
+        - Keyword match: default 35%
+        - LLM analysis score: default 40%
+        Weights can be overridden by the PlannerAgent.
         """
         composite = (
-            ats_score * 0.25 +
-            keyword_score * 0.35 +
-            llm_score * 0.40
+            ats_score * w_ats +
+            keyword_score * w_kw +
+            llm_score * w_llm
         )
         return round(min(100, max(0, composite)), 2)
 

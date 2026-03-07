@@ -1,7 +1,8 @@
 """
 CognifyX – Coordinator Agent
-Orchestrates the full resume screening pipeline with:
-1. Parsing → 2. ATS Keyword Scoring → 3. LLM Extraction → 4. LLM Scoring → 5. Ranking → 6. Insights
+Orchestrates the full resume screening pipeline with autonomous planning:
+0. Planning (ReAct) → 1. Parsing → 2. ATS → 3. Extraction → 4. Scoring
+→ 4.5 Reflection → 4.75 Debate → 5. Ranking → 6. Insights
 """
 import json
 import time
@@ -13,6 +14,11 @@ from pipeline.candidate_ranker import CandidateRanker
 from pipeline.final_analysis import FinalAnalysis
 from agents.llm_agent import LLMAgent
 from agents.reflection_agent import ReflectionAgent
+from agents.skill_agent import SkillAgent
+from agents.experience_agent import ExperienceAgent
+from agents.culture_agent import CultureAgent
+from agents.debate_moderator import DebateModerator
+from agents.planner_agent import PlannerAgent
 from database.resume_db import ResumeDB
 
 
@@ -26,9 +32,18 @@ class CoordinatorAgent:
         self.ranker = CandidateRanker(self.llm_agent)
         self.analyzer = FinalAnalysis(self.llm_agent)
         self.reflection_agent = ReflectionAgent(self.llm_agent)
+        self.skill_agent = SkillAgent(self.llm_agent)
+        self.experience_agent = ExperienceAgent(self.llm_agent)
+        self.culture_agent = CultureAgent(self.llm_agent)
+        self.debate_moderator = DebateModerator(
+            self.skill_agent, self.experience_agent,
+            self.culture_agent, self.llm_agent
+        )
+        self.planner = PlannerAgent(self.llm_agent)
         self.db = ResumeDB()
         self.logs = []
         self.timings = {}
+        self.plan = None  # Will be set by planning phase
 
     def log(self, message):
         self.logs.append(message)
@@ -58,6 +73,19 @@ class CoordinatorAgent:
 
         # Create pipeline run in DB
         run_id = self.db.create_run(job_description, keywords_input, 0)
+
+        # ── Stage 0: Autonomous Planning (ReAct) ────────────────────
+        t0 = time.time()
+        self.log("🧠 Stage 0: Autonomous Planning (ReAct reasoning)...")
+        self.plan = self.planner.plan(job_description, keywords_input, resume_count=0)
+        self.timings['planning'] = round(time.time() - t0, 2)
+        self.log(f"   Strategy: {self.plan.strategy_label}")
+        self.log(f"   Complexity: {self.plan.jd_complexity} | Est. time: {self.plan.estimated_time}")
+        for rec in self.plan.recommendations:
+            self.log(f"   💡 {rec}")
+
+        # Apply plan’s ATS top_n
+        self.ats_filter = ATSFilter(top_n=self.plan.ats_top_n)
 
         # ── Stage 1: Parse ────────────────────────────────────────────
         t0 = time.time()
@@ -131,48 +159,87 @@ class CoordinatorAgent:
             llm_score = CandidateRanker.extract_llm_score(analysis)
             profile['llm_score'] = llm_score
             profile['composite_score'] = CandidateRanker.compute_composite_score(
-                profile['ats_score'], profile['keyword_score'], llm_score
+                profile['ats_score'], profile['keyword_score'], llm_score,
+                w_ats=self.plan.composite_weights['ats'],
+                w_kw=self.plan.composite_weights['keyword'],
+                w_llm=self.plan.composite_weights['llm']
             )
 
         self.timings['scoring'] = round(time.time() - t0, 2)
         self.log(f"   Scoring complete. ({self.timings['scoring']}s)")
 
         # ── Stage 4.5: Self-Correction & Reflection ───────────────────
-        t0 = time.time()
-        self.log("🔄 Stage 4.5: Running Self-Correction & Reflection...")
-        reflection_results = self.reflection_agent.reflect_batch(
-            structured_profiles, job_description, use_llm=True
-        )
+        if self.plan.run_reflection:
+            t0 = time.time()
+            self.log("🔄 Stage 4.5: Running Self-Correction & Reflection...")
+            reflection_results = self.reflection_agent.reflect_batch(
+                structured_profiles, job_description, use_llm=True
+            )
 
-        # Apply corrected scores
-        corrected_count = 0
-        for profile, reflection in zip(structured_profiles, reflection_results):
-            if reflection['was_corrected']:
-                old_score = profile['llm_score']
-                profile['llm_score'] = reflection['corrected_score']
-                profile['composite_score'] = CandidateRanker.compute_composite_score(
-                    profile['ats_score'], profile['keyword_score'], profile['llm_score']
-                )
-                profile['reflection'] = reflection
-                corrected_count += 1
+            # Apply corrected scores
+            corrected_count = 0
+            for profile, reflection in zip(structured_profiles, reflection_results):
+                if reflection['was_corrected']:
+                    old_score = profile['llm_score']
+                    profile['llm_score'] = reflection['corrected_score']
+                    profile['composite_score'] = CandidateRanker.compute_composite_score(
+                        profile['ats_score'], profile['keyword_score'], profile['llm_score']
+                    )
+                    profile['reflection'] = reflection
+                    corrected_count += 1
+                    self.log(
+                        f"   ⚠️ {profile.get('name', profile['filename'])}: "
+                        f"{old_score} → {reflection['corrected_score']} "
+                        f"({len(reflection['anomalies'])} anomalies)"
+                    )
+                else:
+                    profile['reflection'] = reflection
+                    self.log(f"   ✅ {profile.get('name', profile['filename'])}: Score validated.")
+
+            # Forward reflection logs
+            for log_msg in self.reflection_agent.reflection_logs:
+                self.log(log_msg)
+
+            self.timings['reflection'] = round(time.time() - t0, 2)
+            self.log(
+                f"   Reflection complete: {corrected_count}/{len(structured_profiles)} "
+                f"scores corrected. ({self.timings['reflection']}s)"
+            )
+        else:
+            reflection_results = []
+            self.log("⏭️ Stage 4.5: Reflection SKIPPED (planner decision).")
+
+        # ── Stage 4.75: Multi-Agent Debate ──────────────────────────
+        if self.plan.run_debate:
+            t0 = time.time()
+            self.log("🏛️ Stage 4.75: Running Multi-Agent Debate...")
+
+            # Apply plan debate weights
+            self.debate_moderator.WEIGHTS = self.plan.debate_weights
+
+            debate_results = self.debate_moderator.debate_batch(
+                structured_profiles, job_description
+            )
+
+            # Blend debate consensus score with existing composite
+            for profile, debate in zip(structured_profiles, debate_results):
+                old_composite = profile['composite_score']
+                debate_score = debate['consensus_score']
+                blended = round(old_composite * 0.60 + debate_score * 0.40, 2)
+                profile['composite_score'] = blended
+                profile['debate'] = debate
                 self.log(
-                    f"   ⚠️ {profile.get('name', profile['filename'])}: "
-                    f"{old_score} → {reflection['corrected_score']} "
-                    f"({len(reflection['anomalies'])} anomalies)"
+                    f"   🏛️ {profile.get('name', profile['filename'])}: "
+                    f"Debate consensus={debate_score} | "
+                    f"S:{debate['skill_score']} E:{debate['experience_score']} C:{debate['culture_score']} "
+                    f"| Blended={blended}"
                 )
-            else:
-                profile['reflection'] = reflection
-                self.log(f"   ✅ {profile.get('name', profile['filename'])}: Score validated.")
 
-        # Forward reflection logs
-        for log_msg in self.reflection_agent.reflection_logs:
-            self.log(log_msg)
-
-        self.timings['reflection'] = round(time.time() - t0, 2)
-        self.log(
-            f"   Reflection complete: {corrected_count}/{len(structured_profiles)} "
-            f"scores corrected. ({self.timings['reflection']}s)"
-        )
+            self.timings['debate'] = round(time.time() - t0, 2)
+            self.log(f"   Debate complete. ({self.timings['debate']}s)")
+        else:
+            debate_results = []
+            self.log("⏭️ Stage 4.75: Debate SKIPPED (planner decision).")
 
         # ── Stage 5: Final Ranking ────────────────────────────────────
         ranked_profiles = CandidateRanker.rank_candidates(structured_profiles)
@@ -218,6 +285,8 @@ class CoordinatorAgent:
             "shortlisted": shortlisted,
             "final_summary": summary,
             "reflection_results": reflection_results,
+            "debate_results": debate_results,
+            "plan": self.plan,
             "timings": self.timings,
             "logs": self.logs,
             "run_id": run_id
