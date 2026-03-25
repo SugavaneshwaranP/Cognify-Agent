@@ -65,7 +65,7 @@ class ReportAgent:
 
         if shortlisted:
             top = shortlisted[0]
-            top_name = top.get('name', 'Unknown')
+            top_name = top.get('filename', 'Unknown')
             top_score = top.get('composite_score', 0)
             avg_score = round(sum(c.get('composite_score', 0) for c in shortlisted) / max(n_short, 1), 1)
         else:
@@ -113,7 +113,7 @@ class ReportAgent:
             debate = c.get('debate', {})
             matrix.append({
                 "rank": c.get('final_rank', '?'),
-                "name": c.get('name', c.get('filename', 'Unknown')),
+                "filename": c.get('filename', 'Unknown'),
                 "domain": c.get('domain', 'General'),
                 "experience_years": c.get('experience_years', 0) or 0,
                 "education": c.get('education', 'Not specified'),
@@ -205,7 +205,7 @@ class ReportAgent:
         question_bank = []
 
         for c in shortlisted:
-            name = c.get('name', 'Unknown')
+            name = c.get('filename', 'Unknown')
             skills = c.get('skills', [])
             missed = c.get('keywords_missed', [])
             domain = c.get('domain', 'Software')
@@ -355,6 +355,7 @@ class ReportAgent:
         for c in shortlisted:
             domain_raw = (c.get('domain', '') or '').lower()
             exp_years = c.get('experience_years', 0) or 0
+            filename = c.get('filename', 'Unknown')
 
             # Map domain to salary category
             domain_key = "default"
@@ -380,7 +381,7 @@ class ReportAgent:
 
             benchmarks.append({
                 "rank": c.get('final_rank', '?'),
-                "name": c.get('name', 'Unknown'),
+                "filename": filename,
                 "domain": c.get('domain', 'General'),
                 "experience": exp_years,
                 "level": level.title(),

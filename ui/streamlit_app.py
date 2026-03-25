@@ -1072,7 +1072,7 @@ def run_full_pipeline(uploaded_files, jd, keywords_input, shortlist_count):
         # Add welcome message to chat
         if not st.session_state.chat_messages:
             shortlisted = st.session_state.results.get('shortlisted', [])
-            top_name = shortlisted[0].get('name', 'Unknown') if shortlisted else 'Unknown'
+            top_name = shortlisted[0].get('filename', 'Unknown') if shortlisted else 'Unknown'
             welcome = (
                 f"👋 Pipeline complete! I've analyzed **{st.session_state.results.get('total_parsed', 0)}** "
                 f"resumes and shortlisted **{len(shortlisted)}** candidates. "
@@ -1306,8 +1306,8 @@ if st.session_state.results:
             col_info, col_scores, col_btn = st.columns([3, 2, 1])
 
             with col_info:
-                st.markdown(f"### {medal} {c.get('name', c.get('filename', 'Unknown'))}")
-                st.caption(f"📄 {c.get('filename', '')}  •  🏷️ {c.get('domain', 'General')}")
+                st.markdown(f"### {medal} {c.get('filename', 'Unknown')}")
+                st.caption(f"🏷️ {c.get('domain', 'General')}")
                 skills = c.get('skills', [])
                 if skills:
                     skill_html = " ".join([f"<span class='skill-tag'>{s}</span>" for s in skills[:8]])
@@ -1353,7 +1353,7 @@ if st.session_state.results:
         table_data = []
         for c in display_list:
             table_data.append({
-                "Rank": c.get('final_rank', '-'), "Name": c.get('name', c.get('filename', '')),
+                "Rank": c.get('final_rank', '-'),
                 "File": c.get('filename', ''), "Domain": c.get('domain', 'General'),
                 "Experience": f"{c.get('experience_years', '?')} yrs",
                 "ATS Score": c.get('ats_score', 0), "Keyword Match": f"{c.get('keyword_score', 0)}%",
@@ -1392,7 +1392,7 @@ if st.session_state.results:
                 st.markdown(f"<div class='reflection-card {card_class}'>", unsafe_allow_html=True)
                 ref_col1, ref_col2 = st.columns([3, 1])
                 with ref_col1:
-                    st.markdown(f"#### {status_icon} {ref.get('candidate', 'Unknown')}")
+                    st.markdown(f"#### {status_icon} {ref.get('filename', 'Unknown')}")
                     if ref.get('was_corrected'):
                         st.markdown(f"<div class='score-correction'><span class='score-original'>{ref.get('original_score', '?')}</span><span class='score-arrow'>→</span><span class='score-corrected'>{ref.get('corrected_score', '?')}</span><span style='font-size:0.8rem; color:#64748b;'>/100 (LLM Score)</span></div>", unsafe_allow_html=True)
                     else:
@@ -1419,7 +1419,7 @@ if st.session_state.results:
             st.markdown("### 🏛️ Multi-Agent Debate Transcripts")
             st.markdown("*Three specialized agents debated each candidate. A Devil's Advocate challenged their conclusions, and the Moderator synthesized the final consensus score.*")
             for di, d in enumerate(debate_data):
-                with st.expander(f"🏛️ {d.get('candidate', 'Unknown')} — Consensus: {d.get('consensus_score', '?')}/100 | Skill: {d.get('skill_score', '?')} | Exp: {d.get('experience_score', '?')} | Culture: {d.get('culture_score', '?')}{'  ⚡' + str(d.get('penalty', 0)) + 'pt penalty' if d.get('penalty', 0) > 0 else ''}", expanded=(di == 0)):
+                with st.expander(f"🏛️ {d.get('filename', 'Unknown')} — Consensus: {d.get('consensus_score', '?')}/100 | Skill: {d.get('skill_score', '?')} | Exp: {d.get('experience_score', '?')} | Culture: {d.get('culture_score', '?')}{'  ⚡' + str(d.get('penalty', 0)) + 'pt penalty' if d.get('penalty', 0) > 0 else ''}", expanded=(di == 0)):
                     dcol1, dcol2, dcol3, dcol4 = st.columns(4)
                     with dcol1:
                         st.markdown(f"<div class='metric-card'><div class='metric-value' style='color: #06b6d4;'>{d.get('skill_score', 0)}</div><div class='metric-label'>🔧 Skill</div></div>", unsafe_allow_html=True)
@@ -1531,7 +1531,7 @@ if st.session_state.results:
                 with st.expander("💬 Interview Question Bank"):
                     st.markdown(f"*{iq.get('total_questions', 0)} personalized questions generated*")
                     for cand in iq.get('candidates', []):
-                        st.markdown(f"#### #{cand['rank']} – {cand['candidate']}")
+                        st.markdown(f"#### #{cand['rank']} – {cand.get('filename', 'Unknown')}")
                         for q in cand['questions']:
                             st.markdown(f"**[{q['type']}]** {q['question']}  \n<small style='color:#64748b;'>📌 {q['reason']}</small>", unsafe_allow_html=True)
                         st.markdown("---")
@@ -1557,7 +1557,7 @@ if st.session_state.results:
                 with st.expander("💰 Salary Benchmarking"):
                     import pandas as pd
                     df_salary = pd.DataFrame(benchmarks)
-                    display_cols = ['rank', 'name', 'level', 'salary_min', 'salary_max', 'midpoint', 'composite_score']
+                    display_cols = ['rank', 'level', 'salary_min', 'salary_max', 'midpoint', 'composite_score']
                     available = [c for c in display_cols if c in df_salary.columns]
                     st.dataframe(df_salary[available], use_container_width=True, hide_index=True)
                     st.caption(salary.get('note', ''))

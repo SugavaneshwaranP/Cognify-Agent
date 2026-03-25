@@ -73,7 +73,7 @@ def _create_score_comparison_chart(matrix_data):
     if not rows:
         return None
 
-    names = [r['name'][:15] for r in rows]
+    names = [r.get('filename', 'Unknown')[:15] for r in rows]
     ats = [r.get('ats_score', 0) for r in rows]
     kw =  [r.get('keyword_score', 0) for r in rows]
     llm = [r.get('llm_score', 0) for r in rows]
@@ -198,7 +198,7 @@ def _create_salary_chart(salary_data):
     if not benchmarks:
         return None
 
-    names = [b['name'][:15] for b in benchmarks]
+    names = [b.get('filename', 'Unknown')[:15] for b in benchmarks]
     mins = [int(b['salary_min'].replace('$', '').replace(',', '')) for b in benchmarks]
     maxs = [int(b['salary_max'].replace('$', '').replace(',', '')) for b in benchmarks]
     mids = [int(b['midpoint'].replace('$', '').replace(',', '')) for b in benchmarks]
@@ -292,11 +292,11 @@ class PDFReportGenerator:
         if rows:
             elements.append(Paragraph("📊 Candidate Comparison Matrix", heading_style))
 
-            table_data = [["#", "Name", "Domain", "Exp", "ATS", "KW%",
+            table_data = [["#", "File", "Domain", "Exp", "ATS", "KW%",
                            "LLM", "Composite"]]
             for r in rows:
                 table_data.append([
-                    str(r['rank']), r['name'][:20], r['domain'][:15],
+                    str(r['rank']), r.get('filename', 'Unknown')[:20], r['domain'][:15],
                     str(r['experience_years']), str(r['ats_score']),
                     str(r['keyword_score']), str(r['llm_score']),
                     str(r['composite_score']),
@@ -365,7 +365,7 @@ class PDFReportGenerator:
 
             for cand in iq.get('candidates', []):
                 elements.append(Paragraph(
-                    f"<b>#{cand['rank']} – {cand['candidate']}</b>", body_style))
+                    f"<b>#{cand['rank']} – {cand.get('candidate', 'Unknown')}</b>", body_style))
                 for q in cand['questions']:
                     elements.append(Paragraph(
                         f"  • [{q['type']}] {q['question']}", small_style))
@@ -399,10 +399,10 @@ class PDFReportGenerator:
             elements.append(PageBreak())
             elements.append(Paragraph("💰 Salary Benchmarking", heading_style))
 
-            sal_table = [["#", "Name", "Level", "Min", "Max", "Midpoint"]]
+            sal_table = [["#", "File", "Level", "Min", "Max", "Midpoint"]]
             for b in benchmarks:
                 sal_table.append([
-                    str(b['rank']), b['name'][:20], b['level'],
+                    str(b['rank']), b.get('filename', 'Unknown')[:20], b['level'],
                     b['salary_min'], b['salary_max'], b['midpoint']
                 ])
             st = Table(sal_table, repeatRows=1)
@@ -512,11 +512,11 @@ class DOCXReportGenerator:
         rows = matrix.get('rows', [])
         if rows:
             self._add_heading(doc, '📊 Candidate Comparison Matrix', level=1)
-            headers = ["#", "Name", "Domain", "Exp", "ATS", "KW%", "LLM", "Composite"]
+            headers = ["#", "File", "Domain", "Exp", "ATS", "KW%", "LLM", "Composite"]
             table_rows = []
             for r in rows:
                 table_rows.append([
-                    str(r['rank']), r['name'][:25], r['domain'][:15],
+                    str(r['rank']), r.get('filename', 'Unknown')[:25], r['domain'][:15],
                     str(r['experience_years']), str(r['ats_score']),
                     str(r['keyword_score']), str(r['llm_score']),
                     str(r['composite_score']),
@@ -552,7 +552,7 @@ class DOCXReportGenerator:
             doc.add_page_break()
             self._add_heading(doc, '💬 Interview Question Bank', level=1)
             for cand in iq.get('candidates', []):
-                self._add_heading(doc, f"#{cand['rank']} – {cand['candidate']}", level=2)
+                self._add_heading(doc, f"#{cand['rank']} – {cand.get('candidate', 'Unknown')}", level=2)
                 for q in cand['questions']:
                     doc.add_paragraph(
                         f"[{q['type']}] {q['question']}",
@@ -586,8 +586,8 @@ class DOCXReportGenerator:
             doc.add_page_break()
             self._add_heading(doc, '💰 Salary Benchmarking', level=1)
             self._add_table(doc,
-                ["#", "Name", "Level", "Min", "Max", "Midpoint"],
-                [[str(b['rank']), b['name'][:25], b['level'],
+                ["#", "File", "Level", "Min", "Max", "Midpoint"],
+                [[str(b['rank']), b.get('filename', 'Unknown')[:25], b['level'],
                   b['salary_min'], b['salary_max'], b['midpoint']]
                  for b in benchmarks]
             )
